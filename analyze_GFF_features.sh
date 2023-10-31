@@ -55,68 +55,7 @@ echo -------------------------------------------------
 echo
 echo "Top 10: chromosome: ${chromosome}"
 echo -------------------------------------------------
-# echo ">>>transcriptsIDs with the highest number of exon "
 
-# # Retriving each unique transcript
-# transcripts=$( cat $filename1 | grep -v "ID=" | grep "exon" | cut -f9 | cut -b 19-33 | sort | uniq )
-
-# # Retriving all exon lines
-# exons=$( cat $filename1 | grep -v "ID=" | grep "exon" | cut -f9 | cut -b 19-33 | sort )
-
-# # Creating a dictionary with every transcriptID as the key
-# declare -A transcriptDict
-
-# # Initialiazing every value to zero
-# for id in $transcripts; do
-# 	#echo $id
-# 	transcriptDict["$id"]=0
-# done
-
-# # Calculating number of exons per transcript
-# for t in $transcripts; do
-#     n_exons=0
-#     is_same=0  # Initialize is_same to 0
-    
-#     # Loop through each exon
-#     for exon in $exons; do
-#         if [[ "$exon" == "$t" ]]; then
-#             # If the exon matches the current transcript, increment the exon count
-#             	n_exons=$((n_exons + 1))
-#             	is_same=1
-#         elif [[ "$is_same" -eq 1 ]]; then
-#             	break
-#         fi
-#     done
-
-#     # Add the count to the associative array
-#     transcriptDict["$t"]=$n_exons
-
-# done
-
-
-# # Array to store transcript and n_of_occurences
-# key_value=()
-
-# for key in "${!transcriptDict[@]}"; do
-# 	key_value+=("$key:${transcriptDict[$key]}")
-# done
-
-# # Sort key value array
-# sorted_key_value=(
-# 	$(
-# 		for item in "${key_value[@]}"; do 
-# 			echo "$item";
-# 		done | sort -t: -k2,2nr
-# 	)
-# )
-
-# for value in "${sorted_key_value[@]:0:10}"; do
-# 	trans=${value%%:*}
-# 	n_feature=${value#*:}
-# 	echo "Transcript ${trans}>>> #exon:${n_feature}	gene..."
-# done
-
-echo --------- With Top 10 function ---------
 
 # -----  Function Top 10 ------
 top_10() {
@@ -130,72 +69,26 @@ top_10() {
 	# Retriving each unique transcript
 	transcripts=$( cat $filename1 | grep -v "ID=" | grep $feature | cut -f9 | cut -b 19-33 | sort | uniq )
 
-	echo "this command takes to long!"
-
 	# Retriving all feature lines and cutting just the id 
-	#lines=$( cat $filename1 | grep -v "ID=" | grep $feature | cut -f9 | cut -b 19-33 | sort )
-	lines1=($( cat $filename1 | grep -v "ID=" | grep $feature | cut -f9 | cut -b 19-33 | sort ))  # Array Version
-
-	echo "size lines1: ${#lines1}"
+	lines=($( cat $filename1 | grep -v "ID=" | grep $feature | cut -f9 | cut -b 19-33 | sort ))
 
 	# Creating a dictionary with every transcriptID as the key
 	declare -A transcriptDict
 
-	# Initialiazing every value to zero
-	# for id in $transcripts; do
-	# 	transcriptDict["$id"]=0
-	# done
-
-
-
-	# Calculating number of exons per transcript
-
-	# Another solution 
-	for element in "${lines1[@]}"; do
-		# Check if the element exists in the counts array
-		if [ -v transcriptDict["$element"] ]; then
+	# Calculating number of feature per transcript
+	for id in "${lines[@]}"; do
+		# Check if the element exists in the dictionary
+		if [ -v transcriptDict["$id"] ]; then
 			# Increment the count
-			((transcriptDict["$element"]++))
+			((transcriptDict["$id"]++))
 		else
 			# Initialize the count to 1 for a new element
-			transcriptDict["$element"]=1
+			transcriptDict["$id"]=1
 		fi
 	done
 
-	# # Display the counts
-	# for element in "${!counts[@]}"; do
-	# 	echo "$element: ${counts["$element"]} occurrences"
-	# done
-
-# 	current_index=0
-# 	for t in $transcripts; do
-# 		n_feat=0
-# 		is_same=0  					# Initialize is_same to 0
-# 		index=$((current_index))	# Updates index to latest index
-
-# 		for index in "${!lines1[@]}"; do
-# 			if [[ "${lines1[$index]}" == "$t" ]]; then   # feature matches the current transcript, increment the count
-# 				n_feat=$((n_feat + 1))
-# 				is_same=1
-# 			elif [[ "$is_same" -eq 1 ]]; then
-# 				# Save the index and for the next one continue from that index
-# 				echo "curr_index: ${current_index} --- index: ${index}"
-# 				current_index=$((index))
-# 				break
-# 			fi
-# 		done
-		
-# 		# Another solution (dont know which one is more efficient)
-# #		n_feat=$(echo $lines | grep -o $t | wc -l )
-
-# 		# Add the count to the dicionary
-# 		transcriptDict[$t]=$((n_feat))
-
-# 	done
-
 	# Array to store transcript and n_of_occurences
 	key_value=()
-
 	for key in "${!transcriptDict[@]}"; do
 		key_value+=("$key:${transcriptDict[$key]}")
 	done
@@ -210,55 +103,25 @@ top_10() {
 	)
 
 	for value in "${sorted_key_value[@]:0:${count}}"; do
-		trans=${value%%:*}
+		
+		transcript_id=${value%%:*}
 		n_feature=${value#*:}
 
-		# I need to retrive the gene ID and its description from the internet
+		# Retriving parent gene ID
+		url="https://rest.ensembl.org/lookup/id/${transcript_id}?content-type=application/json"
+		response=$(curl -s "$url")
+		parent_id=$(echo "$response" | jq -r '.Parent')
+		
+		# Retriving gene description
+		url2="https://rest.ensembl.org/lookup/id/${parent_id}?content-type=application/json"
+		response2=$(curl -s "$url2")
+		description=$(echo "$response2" | jq -r '.description')
 
-		echo "Transcript ${trans}>>> #${feature}:${n_feature} gene: id + description"
+		echo "Transcript ${transcript_id}>>> #${feature}:${n_feature}	gene:${parent_id}	${description}"
 	done
 
 	echo
-
-	# Print the results
-	#for key in "${!transcriptDict[@]}"; do
-	#    echo "Transcript: $key, Number of Exons: ${transcriptDict[$key]}"
-	#done
-
-	#for key in "${!sorted_key_value[@]}"; do
-	#	echo "key: ${key}  value: ${sorted_key_value[$key]}"
-	#done
-
 }
-
-# Binary search function
-#binary_search() {
-#    local arr=("$@")  # Convert arguments to an array
-#    local string=$1
-#	local number="${string//[!0-9]/}"
-#	local target=$((10#$number))
-#   local left=0
-#    local right=$((${#arr[@]} - 1))
-
-#    while [ $left -le $right ]; do
-#        local mid=$((left + (right - left) / 2))
-#		arr_mid="${arr[mid]//[!0-9]/}"
-#		arr_mid_int=$((10#$number)) 
-
-#       if [ "${arr_mid_int}" -eq "$target" ]; then
-#            result=$mid  # Update result if a match is found
-#            right=$((mid - 1))  # Continue searching in the left half
-#        elif [ "${arr_mid_int}" -lt "$target" ]; then
-#            left=$((mid + 1))
-#       else
-#            right=$((mid - 1))
-#        fi
-#    done
-
-#    echo $result
-#}
-
-
 
 top_10 "exon" 10
 top_10 "five_prime_UTR" 10
